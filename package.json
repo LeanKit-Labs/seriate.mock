@@ -1,0 +1,32 @@
+{
+    "name": "seriate.mock",
+    "version": "0.0.1",
+    "description": "A mocking add-on for seriate",
+    "main": "src/index.js",
+    "author": "LeanKit",
+    "homepage": "http://github.com/leankit-labs/seriate.mock",
+    "license": "MIT License - http://opensource.org/licenses/MIT",
+    "contributors": [{
+        "name": "Brian Edgerton",
+        "email": "brian.edgerton@leankit.com"
+    }, {
+        "name": "Jim Cowart",
+        "email": "jim.cowart@leankit.com",
+        "url": "http://ifandelse.com"
+    }],
+    "dependencies": {
+        "sinon": "^1.10.2",
+        "lodash": "~2.4.1",
+        "when": "3.2.3"
+    },
+    "devDependencies": {
+        "gulp": "~3.8.0",
+        "gulp-mocha": "~0.4.1",
+        "gulp-watch": "~0.6.6-1",
+        "expect.js": "~0.2.0",
+        "mocha": "~1.20.1",
+        "sinon": "^1.10.2",
+        "seriate": "git://github.com/ifandelse/seriate.git"
+    },
+    "scripts": {}
+}
