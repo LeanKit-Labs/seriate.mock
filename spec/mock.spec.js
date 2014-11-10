@@ -11,13 +11,13 @@ describe( "When clearing a mock", function() {
 			sql.addMock( "myMock", [ 'val1', 'val2', 'val3' ] );
 			sql.addMock( "myMock2", [ 'val4', 'val5', 'val6' ] );
 
-			expect( sql.mockCache.myMock ).to.be.an( "object" );
-			expect( sql.mockCache.myMock2 ).to.be.an( "object" );
+			expect( sql.mockCache[ "root" ].myMock ).to.be.an( "object" );
+			expect( sql.mockCache[ "root" ].myMock2 ).to.be.an( "object" );
 
 			sql.clearMock( "myMock" );
 
-			expect( sql.mockCache.myMock ).to.not.be.an( "object" );
-			expect( sql.mockCache.myMock2 ).to.be.an( "object" );
+			expect( sql.mockCache[ "root" ].myMock ).to.not.be.an( "object" );
+			expect( sql.mockCache[ "root" ].myMock2 ).to.be.an( "object" );
 		} );
 
 	} );
@@ -27,13 +27,13 @@ describe( "When clearing a mock", function() {
 			sql.addMock( "myMock", [ 'val1', 'val2', 'val3' ] );
 			sql.addMock( "myMock2", [ 'val4', 'val5', 'val6' ] );
 
-			expect( sql.mockCache.myMock ).to.be.an( "object" );
-			expect( sql.mockCache.myMock2 ).to.be.an( "object" );
+			expect( sql.mockCache[ "root" ].myMock ).to.be.an( "object" );
+			expect( sql.mockCache[ "root" ].myMock2 ).to.be.an( "object" );
 
 			sql.clearMock();
 
-			expect( sql.mockCache.myMock ).to.not.be.an( "object" );
-			expect( sql.mockCache.myMock2 ).to.not.be.an( "object" );
+			expect( sql.mockCache ).to.be.empty();
+
 		} );
 
 	} );

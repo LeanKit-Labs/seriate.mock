@@ -1,5 +1,6 @@
 var _ = require( "lodash" );
 var when = require( "when" );
+var path = require( "path" );
 
 /* Example mock object structure
 
@@ -13,13 +14,35 @@ var when = require( "when" );
 
 */
 
+function getCacheKey( options ) {
+	options = options || {};
+	return options.cacheKey || "root";
+}
+
+function isAbsolutePath( p ) {
+	return path.resolve( p ) === path.normalize( p ).replace( /(.+)([\/|\\])$/, "$1" );
+}
+
+function isFileMock( str ) {
+	return str.slice( 0, 7 ) === "file://";
+}
+
+function getFileMockKey( str ) {
+	return str.slice( 7 );
+}
+
 var methods = {
-	addMock: function( key, mock ) {
+	addMock: function( key, mock, options ) {
+		var cacheKey = getCacheKey( options );
 		var realMock = mock;
 		var defaults = {
 			isError: false,
 			waitTime: 0
 		};
+
+		if ( !this.mockCache[ cacheKey ] ) {
+			this.mockCache[ cacheKey ] = {};
+		}
 
 		if ( _.isFunction( realMock ) ) {
 			// Just a function was given
@@ -46,32 +69,65 @@ var methods = {
 			}
 		}
 
-		this.mockCache[ key ] = realMock;
+		this.mockCache[ cacheKey ][ key ] = realMock;
 	},
-	getMock: function( key ) {
+
+	addMockFile: function( filePath, mock ) {
+		var absPath = path.resolve( this.getMockConfig( "sqlFileBasePath" ), filePath );
+		this.addMock( absPath, mock, { cacheKey: "file" } )
+	},
+
+	getMock: function( key, options ) {
+		var cacheKey = getCacheKey( options );
 		// can't mock "result" key, since
 		// that's the internal step name used
 		// when calling execute/executeTransaction
-		var mock = ( key === "result" ) ? undefined : this.mockCache[ key ];
+
+		if ( _.isUndefined( this.mockCache[ cacheKey ] ) ) {
+			return undefined;
+		}
+
+		var mock = ( key === "result" ) ? undefined : this.mockCache[ cacheKey ][ key ];
 		if ( mock ) {
 			//console.info( "Mock key found:", key );
 		}
 		return mock ? mock : undefined;
 	},
-	clearMock: function( key ) {
+	getFileMock: function( key ) {
+		if ( !isFileMock( key ) ) {
+			return undefined;
+		}
+		var key = getFileMockKey( key );
+		return this.getMock( key, { cacheKey: "file" } );
+	},
+	clearMock: function( key, options ) {
+		var cacheKey = getCacheKey( options );
 		if ( arguments.length === 0 ) {
 			this.mockCache = {};
 		} else {
-			if ( this.mockCache.hasOwnProperty( key ) ) {
-				delete this.mockCache[ key ];
+			if ( this.mockCache[ cacheKey ].hasOwnProperty( key ) ) {
+				delete this.mockCache[ cacheKey ][ key ];
 			}
 		}
+	},
+	findMockForKey: function( key ) {
+		var mock = this.getMock( key );
+
+		if ( !_.isUndefined( mock ) ) {
+			return mock;
+		} else {
+			mock = this.getFileMock( key );
+		}
+
+		return mock;
 	},
 	resolveMock: function( stepName, options ) {
 		// Search by:
 		// 1. Step Name
 		// 2. Query
-		// 3. File
+		// 3. Prepared SQL
+		// 4. Procedure
+		// 5. File
 
 		var mock; // undefined
 
@@ -82,21 +138,57 @@ var methods = {
 		}
 
 		if ( options.query ) {
-			mock = this.getMock( options.query );
+			mock = this.findMockForKey( options.query );
+			if ( !_.isUndefined( mock ) ) {
+				return mock;
+			}
 		}
 
+		if ( options.preparedSql ) {
+			mock = this.findMockForKey( options.preparedSql );
+
+			if ( !_.isUndefined( mock ) ) {
+				return mock;
+			}
+		}
+
+		if ( options.procedure ) {
+			mock = this.findMockForKey( options.procedure );
+
+			if ( !_.isUndefined( mock ) ) {
+				return mock;
+			}
+		}
+
+
+
 		return mock;
+	},
+
+	setMockConfig: function( config ) {
+		_.extend( this.mockConfig, config );
+	},
+
+	getMockConfig: function( key ) {
+		return this.mockConfig[ key ];
 	}
 };
 
 module.exports = {
 
-	setup: function( sql ) {
+	setup: function( sql, options ) {
+		options = options || {};
 
 		sql.mockCache = {};
-		sql._allow_failed_connections = true;
+		sql.mockConfig = {};
 
 		_.extend( sql, methods );
+
+		var defaultConfig = {
+			ignoreFailedConnections: true
+		};
+
+		sql.setMockConfig( _.merge( defaultConfig, options ) );
 
 		var origContext = sql.SqlContext;
 		sql.SqlContext = origContext.extend( {
@@ -129,7 +221,7 @@ module.exports = {
 			states: {
 				connecting: {
 					error: function( err ) {
-						if ( sql._allow_failed_connections ) {
+						if ( sql.getMockConfig( "ignoreFailedConnections" ) ) {
 							return this.states.connecting.success.call( this );
 						}
 						this.err = err;
@@ -138,6 +230,21 @@ module.exports = {
 				}
 			}
 		} );
+
+		var _fromFile = sql.fromFile;
+
+		sql.fromFile = function( p ) {
+			p = this._getFilePath( p );
+
+			var mockExists = !_.isUndefined( this.getMock( p, { cacheKey: "file" } ) );
+
+			if ( mockExists ) {
+				return "file://" + p;
+			} else {
+				return _fromFile.call( this, p );
+			}
+
+		};
 
 	}
 
