@@ -191,6 +191,9 @@ module.exports = {
 		sql.setMockConfig( _.merge( defaultConfig, options ) );
 
 		var origContext = sql.SqlContext;
+		var _executeSql = origContext.prototype.executeSql;
+		var _errorState = origContext.prototype.states.connecting.error;
+
 		sql.SqlContext = origContext.extend( {
 			executeSql: function( options ) {
 				var stepName = this.state;
@@ -212,11 +215,7 @@ module.exports = {
 					}.bind( this ) );
 				}
 
-				if ( options.query || options.procedure ) {
-					return this.nonPreparedSql.call( this, options );
-				} else {
-					return this.preparedSql.call( this, options );
-				}
+				return origPrototype.executeSql.call( this, options );
 			},
 			states: {
 				connecting: {
@@ -224,8 +223,7 @@ module.exports = {
 						if ( sql.getMockConfig( "ignoreFailedConnections" ) ) {
 							return this.states.connecting.success.call( this );
 						}
-						this.err = err;
-						this.transition( "error" );
+						return _errorState.call( this, err );
 					}
 				}
 			}
