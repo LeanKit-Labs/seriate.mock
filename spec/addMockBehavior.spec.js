@@ -21,7 +21,7 @@ describe( "When adding a mock", function() {
 
 			sql.addMock( "myMock", mockObj );
 
-			expect( sql.mockCache[ "root" ].myMock ).to.eql( _.merge( { waitTime: 0 }, mockObj ) );
+			expect( sql.mockCache[ "root" ].myMock ).to.eql( _.merge( { waitTime: 0, once: false }, mockObj ) );
 		} );
 		it( "should ensure that mockResults is a function", function() {
 			var mockObj = {
