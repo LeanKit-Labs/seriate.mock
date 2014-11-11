@@ -1,5 +1,6 @@
 var _ = require( "lodash" );
 var when = require( "when" );
+var mockMethods = require( "./methods" );
 
 /* Example mock object structure
 
@@ -8,137 +9,146 @@ var when = require( "when" );
 			return []; // array of mock rows
 		},
 		isError: true/false,
-		waitTime: { milliseconds } to wait (defaults to 0)
+		waitTime: { milliseconds } to wait (defaults to 0),
+		once: false
 	}
 
 */
 
-var methods = {
-	addMock: function( key, mock ) {
-		var realMock = mock;
-		var defaults = {
-			isError: false,
-			waitTime: 0
-		};
-
-		if ( _.isFunction( realMock ) ) {
-			// Just a function was given
-			realMock = _.merge( defaults, {
-				mockResults: mock,
-			} );
-		} else if ( !_.isPlainObject( realMock ) ) {
-			// Something other than a function or object was given
-			var result = _.clone( realMock );
-			realMock = _.merge( defaults, {
-				mockResults: function() {
-					return result;
-				}
-			} );
-		} else {
-			realMock = _.merge( defaults, mock );
-		}
-
-		if ( !_.isFunction( realMock.mockResults ) ) {
-			// Ensure that mockResults is a function
-			var results = _.clone( realMock.mockResults );
-			realMock.mockResults = function() {
-				return results;
-			}
-		}
-
-		this.mockCache[ key ] = realMock;
-	},
-	getMock: function( key ) {
-		// can't mock "result" key, since
-		// that's the internal step name used
-		// when calling execute/executeTransaction
-		var mock = ( key === "result" ) ? undefined : this.mockCache[ key ];
-		if ( mock ) {
-			//console.info( "Mock key found:", key );
-		}
-		return mock ? mock : undefined;
-	},
-	clearMock: function( key ) {
-		if ( arguments.length === 0 ) {
-			this.mockCache = {};
-		} else {
-			if ( this.mockCache.hasOwnProperty( key ) ) {
-				delete this.mockCache[ key ];
-			}
-		}
-	},
-	resolveMock: function( stepName, options ) {
-		// Search by:
-		// 1. Step Name
-		// 2. Query
-		// 3. File
-
-		var mock; // undefined
-
-		mock = this.getMock( stepName );
+function executeSqlFn( sql, fallbackFn ) {
+	return function( options ) {
+		var stepName = this.state;
+		var mock = sql.resolveMock( stepName, options );
 
 		if ( !_.isUndefined( mock ) ) {
-			return mock;
+			return when.promise( function( resolve, reject ) {
+				var results = mock.mockResults.call( this, stepName, options );
+				var timeout = mock.waitTime || 0;
+
+				setTimeout( function() {
+					if ( mock.isError ) {
+						reject( results );
+					} else {
+						resolve( results );
+					}
+				}, timeout );
+
+			}.bind( this ) );
 		}
 
-		if ( options.query ) {
-			mock = this.getMock( options.query );
-		}
-
-		return mock;
-	}
-};
+		return fallbackFn.call( this, options );
+	};
+}
 
 module.exports = {
 
-	setup: function( sql ) {
+	setup: function( sql, options ) {
+		options = options || {};
 
 		sql.mockCache = {};
-		sql._allow_failed_connections = true;
+		sql.mockConfig = {};
 
-		_.extend( sql, methods );
+		_.extend( sql, mockMethods );
 
+		var defaultConfig = {
+			ignoreFailedConnections: true
+		};
+
+		sql.setMockConfig( _.merge( defaultConfig, options ) );
+
+		this.patchSeriate( sql );
+
+		this.patchSqlContext( sql );
+
+		this.patchTransactionContext( sql );
+
+	},
+
+	patchSeriate: function( sql ) {
+		var _fromFile = sql.fromFile;
+
+		sql.fromFile = function( p ) {
+			p = this._getFilePath( p );
+
+			var mockExists = !_.isUndefined( this.getMock( p, { cacheKey: "file" } ) );
+
+			if ( mockExists ) {
+				return "file://" + p;
+			} else {
+				return _fromFile.call( this, p );
+			}
+
+		};
+	},
+
+	patchSqlContext: function( sql ) {
 		var origContext = sql.SqlContext;
+		var _executeSql = origContext.prototype.executeSql;
+		var _errorState = origContext.prototype.states.connecting.error;
+
 		sql.SqlContext = origContext.extend( {
-			executeSql: function( options ) {
-				var stepName = this.state;
-				var mock = sql.resolveMock( stepName, options );
-
-				if ( !_.isUndefined( mock ) ) {
-					return when.promise( function( resolve, reject ) {
-						var results = mock.mockResults.call( this, stepName, options );
-						var timeout = mock.waitTime || 0;
-
-						setTimeout( function() {
-							if ( mock.isError ) {
-								reject( results );
-							} else {
-								resolve( results );
-							}
-						}, timeout )
-
-					}.bind( this ) );
-				}
-
-				if ( options.query || options.procedure ) {
-					return this.nonPreparedSql.call( this, options );
-				} else {
-					return this.preparedSql.call( this, options );
-				}
-			},
+			executeSql: executeSqlFn( sql, _executeSql ),
 			states: {
 				connecting: {
 					error: function( err ) {
-						if ( sql._allow_failed_connections ) {
+						if ( sql.getMockConfig( "ignoreFailedConnections" ) ) {
 							return this.states.connecting.success.call( this );
 						}
-						this.err = err;
-						this.transition( "error" );
+						return _errorState.call( this, err );
 					}
 				}
 			}
 		} );
+	},
 
+	patchTransactionContext: function( sql ) {
+		var origContext = sql.TransactionContext;
+		var _executeSql = origContext.prototype.executeSql;
+		var _errorState = origContext.prototype.states.connecting.error;
+
+		sql.TransactionContext = origContext.extend( {
+			executeSql: executeSqlFn( sql, _executeSql ),
+			states: {
+				connecting: {
+					error: function( err ) {
+						if ( sql.getMockConfig( "ignoreFailedConnections" ) ) {
+							var success = this.states.connecting.success;
+							if ( _.isString( success ) ) {
+								return this.transition( success );
+							} else {
+								return success.call( this );
+							}
+						}
+						return _errorState.call( this, err );
+					}
+				},
+				startingTransaction: {
+					_onEnter: function() {
+						return this.states.startingTransaction.success.call( this );
+					}
+				},
+				done: {
+					_onEnter: function() {
+						var self = this;
+						self.emit( "end", {
+							sets: self.results,
+							transaction: {
+								commit: function() {
+									return when.promise( function( resolve ) {
+										resolve();
+									} );
+								},
+								rollback: function() {
+									return when.promise( function( resolve ) {
+										resolve();
+									} );
+								}
+							}
+						} );
+					}
+				}
+			}
+		} );
 	}
 
 };

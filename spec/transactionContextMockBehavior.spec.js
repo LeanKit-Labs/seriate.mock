@@ -1,10 +1,11 @@
 var mock = require( "../src/index.js" );
 var expect = require( "expect.js" );
+var _ = require( "lodash" );
 var sql = require( "seriate" );
 
 mock( sql );
 
-describe( "Plain Context Mocking behavior", function() {
+describe( "Transaction Context Mocking behavior", function() {
 
 	beforeEach( function() {
 		sql.clearMock();
@@ -30,14 +31,14 @@ describe( "Plain Context Mocking behavior", function() {
 			} );
 		} );
 		it( "should produce correct mock results", function( done ) {
-			sql.getPlainContext()
+			sql.getTransactionContext()
 				.step( "guise", {
 					params: {
 						testval: "foo"
 					}
 				} )
-				.end( function( sets ) {
-					expect( sets.guise ).to.eql( expectedResult );
+				.end( function( results ) {
+					expect( results.sets.guise ).to.eql( expectedResult );
 					done();
 				} );
 		} );
@@ -60,12 +61,12 @@ describe( "Plain Context Mocking behavior", function() {
 			] );
 		} );
 		it( "should produce correct mock results", function( done ) {
-			sql.getPlainContext()
+			sql.getTransactionContext()
 				.step( "guise", {
 					testval: "foo"
 				} )
-				.end( function( sets ) {
-					expect( sets.guise ).to.eql( expectedResult );
+				.end( function( results ) {
+					expect( results.sets.guise ).to.eql( expectedResult );
 					done();
 				} );
 		} );
@@ -77,8 +78,8 @@ describe( "Plain Context Mocking behavior", function() {
 			sql.addMock( 'someMock', {
 				mockResults: expectedResult,
 				isError: true
-			} );
-			sql.getPlainContext()
+			} )
+			sql.getTransactionContext()
 				.step( "someMock", {
 					params: {
 						testval: "foo"
@@ -93,71 +94,26 @@ describe( "Plain Context Mocking behavior", function() {
 
 	describe( "When mock contains a specified timeout", function() {
 		it( "should wait appropriately to execute", function( done ) {
-			this.timeout( 3000 );
+			this.timeout( 5000 );
 			var start = Date.now();
 
 			var expectedResult = [ "thing1", "thing2" ];
 			sql.addMock( 'someMock', {
 				mockResults: expectedResult,
 				waitTime: 1000
-			} );
-
-			sql.getPlainContext()
+			} )
+			sql.getTransactionContext()
 				.step( "someMock", {
 					params: {
 						testval: "foo"
 					}
 				} )
-				.end( function( sets ) {
+				.end( function( results ) {
 					var interval = Date.now() - start;
 					expect( interval >= 1000 && interval < 2000 ).to.be.ok();
-					expect( sets.someMock ).to.eql( expectedResult );
+					expect( results.sets.someMock ).to.eql( expectedResult );
 					done();
 				} );
-		} );
-	} );
-
-	describe( "'once' option", function() {
-		var expectedResult = [ { name: "HereIAmRockYouLikeAHurricane" } ];
-
-		describe( "when once is false (by default)", function() {
-			it( "should keep the mock after use", function( done ) {
-				sql.addMock( 'someMock', {
-					mockResults: expectedResult,
-					once: false
-				} );
-				sql.getPlainContext()
-					.step( "someMock", {
-						params: {
-							testval: "foo"
-						}
-					} )
-					.end( function( sets ) {
-						expect( sets.someMock ).to.eql( expectedResult );
-						expect( sql.mockCache.root.someMock ).to.not.be( undefined );
-						done();
-					} );
-			} );
-		} );
-
-		describe( "when once is true", function() {
-			it( "should dispose of mock after one use", function( done ) {
-				sql.addMock( 'someMock', {
-					mockResults: expectedResult,
-					once: true
-				} );
-				sql.getPlainContext()
-					.step( "someMock", {
-						params: {
-							testval: "foo"
-						}
-					} )
-					.end( function( sets ) {
-						expect( sets.someMock ).to.eql( expectedResult );
-						expect( sql.mockCache.root.someMock ).to.be( undefined );
-						done();
-					} );
-			} );
 		} );
 	} );
 

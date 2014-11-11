@@ -87,7 +87,9 @@
 		"require",
 		"module",
 		"describe",
-		"it"
+		"it",
+		"before",
+		"beforeEach"
 	],
 
 	// LEGACY
