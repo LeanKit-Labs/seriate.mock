@@ -69,7 +69,7 @@ describe( "When getting a mock", function() {
 
 		it( "should return undefined if key is 'result'", function() {
 			var expected = [ 'val1', 'val2', 'val3' ];
-			sql.addMock( "result", expected );
+			sql.addMock( "__result__", expected );
 
 			var myMock = sql.getMock( "result" );
 
