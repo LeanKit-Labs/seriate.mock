@@ -56,7 +56,7 @@ module.exports = {
 		this.mockCache[ cacheKey ][ key ] = realMock;
 	},
 
-	addMockFile: function( filePath, mock ) {
+	addFileMock: function( filePath, mock ) {
 		var absPath = path.resolve( this.getMockConfig( "sqlFileBasePath" ), filePath );
 		this.addMock( absPath, mock, { cacheKey: "file" } );
 	},

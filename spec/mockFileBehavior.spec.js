@@ -19,7 +19,7 @@ describe( "When adding a file mock", function() {
 	it( "should return the correct results", function( done ) {
 		var expectedResults = { name: "Neo", alias: "The One" };
 
-		sql.addMockFile( "./spec/userById", function( stepName, stepArg ) {
+		sql.addFileMock( "./spec/userById", function( stepName, stepArg ) {
 			return expectedResults;
 		} );
 
