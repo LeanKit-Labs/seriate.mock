@@ -22,7 +22,8 @@ describe( "When mocking one-time queries", function() {
 		it( "should support mocking by query", function( done ) {
 			sql.addMock( "SELECT * FROM books", records );
 
-			sql.execute( {
+
+			sql.execute({}, {
 				query: "SELECT * FROM books"
 			} )
 				.then( function( sets ) {
@@ -49,7 +50,7 @@ describe( "When mocking one-time queries", function() {
 		it( "should support mocking by query", function( done ) {
 			sql.addMock( "SELECT * FROM books", records );
 
-			sql.first( {
+			sql.first({}, {
 				query: "SELECT * FROM books"
 			} )
 				.then( function( sets ) {
@@ -61,7 +62,7 @@ describe( "When mocking one-time queries", function() {
 		it( "should support mocking by preparedSql", function( done ) {
 			sql.addMock( "SELECT * FROM books", records );
 
-			sql.first( {
+			sql.first({}, {
 				preparedSql: "SELECT * FROM books"
 			} )
 				.then( function( sets ) {
